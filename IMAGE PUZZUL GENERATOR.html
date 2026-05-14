@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed Photo Jumble & Unjumble</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f2f5;
+            padding: 30px;
+            margin: 0;
+        }
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* අප්ලෝඩ් කිරීමට පෙර පෙන්වන කොටුව */
+        .upload-box {
+            border: 2px dashed #3498db;
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            transition: background 0.3s;
+        }
+        .upload-box:hover {
+            background-color: #f0f7ff;
+        }
+        input[type="file"] {
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        /* ප්‍රමාණය තේරීමේ Dropdown ස්ටයිල් */
+        .select-box {
+            margin: 15px 0;
+        }
+        select {
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            background-color: white;
+        }
+
+        .btn-group {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s, transform 0.1s;
+        }
+        button:active { transform: scale(0.98); }
+
+        /* Jumble Button */
+        #shuffleBtn { background-color: #e67e22; color: white; }
+        #shuffleBtn:hover { background-color: #d35400; }
+        
+        /* Unjumble Button */
+        #unjumbleBtn { background-color: #9b59b6; color: white; }
+        #unjumbleBtn:hover { background-color: #8e44ad; }
+        
+        /* Download Button */
+        #downloadBtn { background-color: #2ecc71; color: white; }
+        #downloadBtn:hover { background-color: #27ae60; }
+        
+        #canvasContainer {
+            margin-top: 25px;
+            position: relative;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border: 4px solid #34495e;
+            border-radius: 8px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><strong>'IMAGE PUZZUL GENERATOR'</strong></h1>
+    
+    <div class="upload-box">
+        <input type="file" id="imageInput" accept="image/*">
+    </div>
+
+    <div class="select-box" id="sizeSelectorContainer" style="display:none;">
+        <select id="gridSizeSelect">
+            <option value="3">9 Pieces (3x3)</option>
+            <option value="4">16 Pieces (4x4)</option>
+            <option value="5">25 Pieces (5x5)</option>
+            <option value="6">36 Pieces (6x6)</option>
+        </select>
+    </div>
+    
+    <div class="btn-group">
+        <button id="shuffleBtn" style="display:none;" onclick="applyFixedJumble()">ස්ථාවරව කලවම් කරන්න</button>
+        <button id="unjumbleBtn" style="display:none;" onclick="applyReverseJumble()">කලවම ලිහා දමන්න</button>
+        <button id="downloadBtn" style="display:none;" onclick="downloadImage()">ෆොටෝ එක බාගත කරගන්න</button>
+    </div>
+
+    <div id="canvasContainer">
+        <canvas id="puzzleCanvas"></canvas>
+    </div>
+</div>
+
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const canvas = document.getElementById('puzzleCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const unjumbleBtn = document.getElementById('unjumbleBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const gridSizeSelect = document.getElementById('gridSizeSelect');
+    const sizeSelectorContainer = document.getElementById('sizeSelectorContainer');
+    
+    let currentLoadedImage = new Image();
+
+    // ස්ථාවර රටාවන් (Fixed Maps) සහ ප්‍රතිවිරුද්ධ රටාවන් (Reverse Maps)
+    const FIXED_MAPS = {
+        3: {
+            jumble: [6, 8, 2, 0, 4, 7, 1, 3, 5],
+            reverse: [3, 6, 2, 7, 4, 8, 0, 5, 1]
+        },
+        4: {
+            jumble: [12, 15, 2, 9, 4, 14, 1, 11, 8, 3, 13, 7, 0, 6, 10, 5],
+            reverse: [12, 6, 2, 9, 4, 15, 13, 11, 8, 3, 14, 7, 0, 10, 5, 1]
+        },
+        5: {
+            jumble: [20, 24, 2, 19, 4, 23, 1, 18, 22, 3, 17, 21, 0, 16, 14, 6, 13, 5, 12, 11, 7, 10, 8, 9, 15],
+            reverse: [12, 6, 2, 9, 4, 17, 15, 20, 22, 23, 21, 19, 18, 16, 14, 24, 13, 10, 7, 3, 0, 11, 8, 5, 1]
+        },
+        6: {
+            jumble: [30, 35, 2, 29, 4, 34, 1, 28, 33, 3, 27, 32, 0, 26, 31, 11, 25, 10, 24, 9, 23, 8, 22, 7, 21, 6, 20, 5, 19, 14, 18, 13, 17, 12, 16, 15],
+            reverse: [12, 6, 2, 9, 4, 27, 25, 23, 21, 19, 17, 15, 33, 31, 29, 35, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 13, 10, 7, 3, 0, 14, 11, 8, 5, 1]
+        }
+    };
+
+    // 1. ෆොටෝ එකක් අප්ලෝඩ් කළ විට
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            currentLoadedImage.src = event.target.result;
+        }
+        reader.readAsDataURL(file);
+    });
+
+    currentLoadedImage.onload = function() {
+        canvas.width = currentLoadedImage.width;
+        canvas.height = currentLoadedImage.height;
+        
+        ctx.drawImage(currentLoadedImage, 0, 0);
+        canvas.style.display = "inline-block";
+        
+        sizeSelectorContainer.style.display = "block";
+        shuffleBtn.style.display = "inline-block";
+        unjumbleBtn.style.display = "inline-block";
+        downloadBtn.style.display = "none";
+    };
+
+    // 2. ස්ථාවර රටාවට කලවම් කිරීමේ ශ්‍රිතය
+    function applyFixedJumble() {
+        const size = parseInt(gridSizeSelect.value);
+        processImageWithMap(FIXED_MAPS[size].jumble, size);
+    }
+
+    // 3. ස්ථාවර ප්‍රතිවිරුද්ධ රටාවට ලිහීමේ ශ්‍රිතය
+    function applyReverseJumble() {
+        const size = parseInt(gridSizeSelect.value);
+        processImageWithMap(FIXED_MAPS[size].reverse, size);
+    }
+
+    // පොදු සැකසුම් ශ්‍රිතය
+    function processImageWithMap(mapToUse, size) {
+        const w = canvas.width;
+        const h = canvas.height;
+        
+        const pieceW = Math.floor(w / size);
+        const pieceH = Math.floor(h / size);
+        
+        const remW = w % size;
+        const remH = h % size;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w;
+        tempCanvas.height = h;
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+        ctx.clearRect(0, 0, w, h);
+
+        mapToUse.forEach((targetPosIndex, sourcePosIndex) => {
+            let srcRow = Math.floor(sourcePosIndex / size);
+            let srcCol = sourcePosIndex % size;
+            
+            let sx = srcCol * pieceW;
+            let sy = srcRow * pieceH;
+            
+            let sw = (srcCol === size - 1) ? pieceW + remW : pieceW;
+            let sh = (srcRow === size - 1) ? pieceH + remH : pieceH;
+
+            let tgtRow = Math.floor(targetPosIndex / size);
+            let tgtCol = targetPosIndex % size;
+            
+            let dx = tgtCol * pieceW;
+            let dy = tgtRow * pieceH;
+            
+            let dw = (tgtCol === size - 1) ? pieceW + remW : pieceW;
+            let dh = (tgtRow === size - 1) ? pieceH + remH : pieceH;
+
+            ctx.drawImage(tempCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
+        });
+
+        downloadBtn.style.display = "inline-block";
+    }
+
+    // 4. සේව් කිරීම
+    function downloadImage() {
+        const imageURI = canvas.toDataURL("image/jpeg", 1.0);
+        const link = document.createElement('a');
+        link.download = 'processed-photo.jpg';
+        link.href = imageURI;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+
+</body>
+</html>
